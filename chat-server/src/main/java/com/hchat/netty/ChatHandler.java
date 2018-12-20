@@ -1,5 +1,10 @@
 package com.hchat.netty;
 
+import com.alibaba.fastjson.JSON;
+import com.hchat.pojo.TbChatRecord;
+import com.hchat.service.ChatRecordService;
+import com.hchat.utils.IdWorker;
+import com.hchat.utils.SpringUtil;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -30,9 +35,43 @@ public class ChatHandler extends SimpleChannelInboundHandler<TextWebSocketFrame>
         String text = msg.text();
         System.out.println("接收到消息的数据为： " + text);
 
-        for (Channel client:clients){
-            //将消息发送到所有的客户端
-            client.writeAndFlush(new TextWebSocketFrame(sdf.format(new Date()) + ":" + text));
+        Message message = JSON.parseObject(text, Message.class);
+
+        //通过SpringUtil工具类获取spring上下文容器
+        ChatRecordService chatRecordService = SpringUtil.getBean(ChatRecordService.class);
+
+        switch (message.getType()){
+            //处理客户端连接消息
+            case 0:
+                //建立用户与通道的关联
+                String userid = message.getChatRecord().getUserid();
+                UserChannelMap.put(userid, ctx.channel());
+                System.out.println("建立用户： " + userid + "与通道 " + ctx.channel().id() + "的关联");
+                UserChannelMap.print();
+                break;
+            //处理客户端发送好友消息
+            case 1:
+                //将聊天数据保存数据库
+                System.out.println("接收到用户消息");
+                TbChatRecord chatRecord = message.getChatRecord();
+                chatRecordService.insert(chatRecord);
+                //1.用户在线
+                Channel channel = UserChannelMap.get(chatRecord.getFriendid());
+                if (channel != null){
+                    channel.writeAndFlush(new TextWebSocketFrame(JSON.toJSONString(message)));
+                }else {
+                    System.out.println("用户" + chatRecord.getFriendid() + "不在线");
+                }
+                break;
+                //2.好友不在线
+            //处理客户端的签收消息
+            case 2:
+                //将消息记录为已读
+                chatRecordService.updateStatusHasRead(message.getChatRecord().getId());
+                break;
+            case 3:
+                System.out.println("接收心跳消息：" + JSON.toJSONString(message));
+                break;
         }
     }
 
@@ -42,5 +81,18 @@ public class ChatHandler extends SimpleChannelInboundHandler<TextWebSocketFrame>
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
         clients.add(ctx.channel());
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        UserChannelMap.removeByChannelId(ctx.channel().id().asLongText());
+        ctx.channel().close();
+    }
+
+    @Override
+    public void handlerRemoved(ChannelHandlerContext ctx) throws Exception {
+        System.out.println("关闭通道");
+        UserChannelMap.removeByChannelId(ctx.channel().id().asLongText());
+        UserChannelMap.print();
     }
 }

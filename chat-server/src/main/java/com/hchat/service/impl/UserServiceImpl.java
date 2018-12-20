@@ -182,35 +182,4 @@ public class UserServiceImpl implements UserService {
         return friendUser;
     }
 
-    /**
-     * 检查是否允许添加好友
-     * @param userid
-     * @param friend
-     */
-    private void checkAllowToAddFriend(String userid, TbUser friend){
-        if (friend.getId().equals(userid)){
-            throw new RuntimeException("不能添加自己为好友");
-        }
-
-        TbFriendExample friendExample = new TbFriendExample();
-        TbFriendExample.Criteria criteria1 = friendExample.createCriteria();
-        criteria1.andUseridEqualTo(userid);
-        criteria1.andFriendsIdEqualTo(friend.getId());
-
-        List<TbFriend> friendList = friendMapper.selectByExample(friendExample);
-
-        if (friendList != null && friendList.size() > 0){
-            throw new RuntimeException(friend.getUsername() + "已经是好友了");
-        }
-
-        TbFriendReqExample friendReqExample = new TbFriendReqExample();
-        TbFriendReqExample.Criteria criteria2 = friendReqExample.createCriteria();
-        criteria2.andFromUseridEqualTo(userid);
-        criteria2.andToUseridEqualTo(friend.getId());
-        criteria2.andStatusEqualTo(0);
-        List<TbFriendReq> friendReqList = friendReqMapper.selectByExample(friendReqExample);
-        if (friendReqList != null && friendReqList.size() > 0){
-            throw new RuntimeException("已经申请了");
-        }
-    }
 }

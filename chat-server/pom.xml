@@ -66,4 +66,5 @@
             <artifactId>fastjson</artifactId>
         </dependency>
     </dependencies>
+
 </project>
